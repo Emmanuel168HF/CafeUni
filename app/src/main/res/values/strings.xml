@@ -1,0 +1,91 @@
+<resources>
+    <!-- Aplicación -->
+    <string name="app_name">Café Uni</string>
+    <string name="app_subtitle">Sistema Universitario de Café</string>
+
+    <!-- Inicio de sesión -->
+    <string name="login_title">¡Bienvenido de nuevo!</string>
+    <string name="login_subtitle">Ingresa tus credenciales para continuar</string>
+    <string name="login_email">Correo institucional</string>
+    <string name="login_email_placeholder">usuario@uttt.edu.mx</string>
+    <string name="login_password">Contraseña</string>
+    <string name="login_password_placeholder">••••••••</string>
+    <string name="login_button">Iniciar sesión</string>
+    <string name="login_no_account">¿No tienes una cuenta?</string>
+    <string name="login_register">Regístrate</string>
+    <string name="login_temporary_dashboard">Ver Dashboard (Temporal)</string>
+    <string name="login_toggle_password">Mostrar u ocultar contraseña</string>
+
+    <!-- Registro -->
+    <string name="register_title">Crear Cuenta</string>
+    <string name="register_subtitle">Completa tus datos para registrarte</string>
+    <string name="register_name">Nombre(s)</string>
+    <string name="register_name_placeholder">Ej. Juan Carlos</string>
+    <string name="register_lastname">Apellido(s)</string>
+    <string name="register_lastname_placeholder">Ej. Pérez Gómez</string>
+    <string name="register_email">Correo institucional</string>
+    <string name="register_email_placeholder">usuario@uttt.edu.mx</string>
+    <string name="register_password">Contraseña</string>
+    <string name="register_password_placeholder">••••••••</string>
+    <string name="register_confirm_password">Confirmar contraseña</string>
+    <string name="register_confirm_password_placeholder">••••••••</string>
+    <string name="register_button">Crear cuenta</string>
+    <string name="register_has_account">¿Ya tienes una cuenta?</string>
+    <string name="register_login">Inicia sesión</string>
+    <string name="register_temporary_dashboard">Ver Dashboard (Temporal)</string>
+
+    <!-- Dashboard Wireframe -->
+    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_user_label">Usuario UTTT</string>
+    <string name="dashboard_header_title">CafeUni • Inicio</string>
+    <string name="dashboard_header_location">Campus Central • Edificio B</string>
+    <string name="dashboard_user_greeting">¡Hola, Sofía!</string>
+    <string name="dashboard_greeting_question">¿Qué se te antoja hoy entre clases?</string>
+    <string name="dashboard_cart_label">Carrito</string>
+    <string name="dashboard_search_hint">Buscar latte, sándwich...</string>
+
+    <string name="dashboard_chip_all">Todo</string>
+    <string name="dashboard_chip_drinks">Bebidas</string>
+    <string name="dashboard_chip_food">Comida</string>
+    <string name="dashboard_chip_desserts">Postres</string>
+
+    <string name="dashboard_banner_tag">BENEFICIO CAMPUS</string>
+    <string name="dashboard_banner_title">15% de descuento</string>
+    <string name="dashboard_banner_action">Aplicar</string>
+
+    <string name="dashboard_popular_title">Populares del día</string>
+    <string name="dashboard_popular_count">6 opciones</string>
+
+    <string name="dashboard_item1_name">Latte Vainilla</string>
+    <string name="dashboard_item1_price">$48</string>
+    <string name="dashboard_item2_name">Capuchino</string>
+    <string name="dashboard_item2_price">$45</string>
+    <string name="dashboard_item3_name">Baguette Pavo</string>
+    <string name="dashboard_item3_price">$65</string>
+    <string name="dashboard_item4_name">Croissant</string>
+    <string name="dashboard_item4_price">$32</string>
+    <string name="dashboard_status_available">Disponible</string>
+    <string name="dashboard_status_out_of_stock">Agotado</string>
+
+    <string name="dashboard_pickup_title">Recoger en taquilla rápida</string>
+    <string name="dashboard_pickup_subtitle">Edificio B • promedio 3 min</string>
+
+    <string name="dashboard_nav_home">Inicio</string>
+    <string name="dashboard_nav_orders">Pedidos</string>
+    <string name="dashboard_nav_profile">Perfil</string>
+    <string name="dashboard_logout">Cerrar sesión</string>
+
+    <!-- Validaciones -->
+    <string name="error_email_required">El correo institucional es obligatorio</string>
+    <string name="error_invalid_email">Ingresa un formato de correo válido</string>
+    <string name="error_invalid_email_domain">Únicamente se aceptan correos @uttt.edu.mx</string>
+    <string name="error_name_required">El nombre es obligatorio</string>
+    <string name="error_lastname_required">Los apellidos son obligatorios</string>
+    <string name="error_password_required">La contraseña es obligatoria</string>
+    <string name="error_password_mismatch">Las contraseñas no coinciden</string>
+
+    <!-- Notificaciones / Mensajes -->
+    <string name="message_login_not_implemented">Inicio de sesión simulado: La autenticación con servidor no está implementada todavía.</string>
+    <string name="message_register_not_implemented">Registro simulado: El almacenamiento de usuarios no está implementado todavía.</string>
+    <string name="message_navigated_to_dashboard">Acceso temporal concedido al Dashboard.</string>
+</resources>
