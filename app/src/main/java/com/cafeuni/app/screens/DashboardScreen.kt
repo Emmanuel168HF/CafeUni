@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -50,32 +49,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cafeuni.app.R
+import com.cafeuni.app.session.SessionManager
+import kotlinx.coroutines.launch
 
 /**
  * Pantalla 3: Dashboard Principal (DashboardScreen)
  *
- * Sigue fielmente la estructura visual del wireframe adjunto de Café Uni:
- * - Encabezado con información del campus y botón de Cerrar Sesión.
- * - Buscador y filtro de categorías (Todo, Bebidas, Comida, Postres).
- * - Banner "BENEFICIO CAMPUS" con descuento del 15%.
- * - Sección "Populares del día" en cuadrícula 2x2.
- * - Sección "Recoger en taquilla rápida".
- * - Barra inferior de navegación visual (Inicio, Pedidos, Perfil).
+ * Muestra los datos del usuario autenticado guardado en DataStore (SessionManager)
+ * y actualiza el encabezado de saludo ("¡Hola, [Nombre]!").
  *
- * El único botón interactivo es el botón de Cerrar Sesión (`onLogout`).
+ * Al hacer clic en Cerrar Sesión, destruye la sesión de DataStore y regresa a LoginScreen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
+    sessionManager: SessionManager,
     onLogout: () -> Unit
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    val userName by sessionManager.userNameFlow.collectAsStateWithLifecycle(initialValue = "")
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Todo") }
     var selectedTab by remember { mutableStateOf("inicio") }
@@ -86,6 +88,13 @@ fun DashboardScreen(
         stringResource(R.string.dashboard_chip_food),
         stringResource(R.string.dashboard_chip_desserts)
     )
+
+    fun handleLogout() {
+        coroutineScope.launch {
+            sessionManager.clearSession()
+            onLogout()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -125,7 +134,7 @@ fun DashboardScreen(
                 },
                 actions = {
                     // Botón funcional de Cerrar Sesión
-                    IconButton(onClick = onLogout) {
+                    IconButton(onClick = { handleLogout() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Logout,
                             contentDescription = stringResource(R.string.dashboard_logout),
@@ -172,7 +181,9 @@ fun DashboardScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 1. Saludo e indicador de Carrito
+            // 1. Saludo personalizado con el nombre del usuario autenticado
+            val displayName = if (userName.isNotEmpty()) userName else "Sofía"
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -180,7 +191,7 @@ fun DashboardScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.dashboard_user_greeting),
+                        text = stringResource(R.string.dashboard_user_greeting, displayName),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground

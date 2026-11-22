@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,18 +47,27 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.cafeuni.app.R
 import com.cafeuni.app.components.CustomTextField
+import com.cafeuni.app.data.repository.UsuarioRepository
+import com.cafeuni.app.session.SessionManager
+import kotlinx.coroutines.launch
 
 /**
  * Pantalla 1: Inicio de Sesión (LoginScreen) construida con Material Design 3 (M3).
  *
- * Muestra la imagen del logo oficial de Café Uni (`R.drawable.logo_cafe_uni`).
+ * Autenticación real con SQLite + PBKDF2:
+ * - Valida correo institucional (@uttt.edu.mx).
+ * - Verifica el hash PBKDF2 en la base de datos SQLite "CafeUni.db".
+ * - Si es válido, guarda la sesión en DataStore y navega al Dashboard.
  */
 @Composable
 fun LoginScreen(
+    usuarioRepository: UsuarioRepository,
+    sessionManager: SessionManager,
     onNavigateToRegister: () -> Unit,
     onNavigateToDashboard: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -93,11 +103,44 @@ fun LoginScreen(
         }
 
         if (isValid) {
-            Toast.makeText(
-                context,
-                R.string.message_login_not_implemented,
-                Toast.LENGTH_LONG
-            ).show()
+            coroutineScope.launch {
+                val result = usuarioRepository.iniciarSesion(
+                    correo = email,
+                    contrasena = password
+                )
+
+                if (result.isSuccess) {
+                    val usuario = result.getOrThrow()
+                    sessionManager.saveSession(
+                        idUsuario = usuario.idUsuario,
+                        nombre = usuario.nombre,
+                        correo = usuario.correo
+                    )
+                    Toast.makeText(
+                        context,
+                        R.string.message_login_success,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    onNavigateToDashboard()
+                } else {
+                    val exception = result.exceptionOrNull()
+                    when (exception?.message) {
+                        "USUARIO_NO_ENCONTRADO" -> {
+                            emailErrorResId = R.string.error_user_not_found
+                        }
+                        "CONTRASENA_INCORRECTA" -> {
+                            passwordErrorResId = R.string.error_invalid_password
+                        }
+                        else -> {
+                            Toast.makeText(
+                                context,
+                                exception?.message ?: "Error al iniciar sesión",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -114,7 +157,7 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Logo oficial de Café Uni enviado por el usuario
+            // Logo oficial de Café Uni
             Image(
                 painter = painterResource(id = R.drawable.logo_cafe_uni),
                 contentDescription = stringResource(R.string.app_name),

@@ -39,7 +39,7 @@
     <string name="dashboard_user_label">Usuario UTTT</string>
     <string name="dashboard_header_title">CafeUni • Inicio</string>
     <string name="dashboard_header_location">Campus Central • Edificio B</string>
-    <string name="dashboard_user_greeting">¡Hola, Sofía!</string>
+    <string name="dashboard_user_greeting">¡Hola, %1$s!</string>
     <string name="dashboard_greeting_question">¿Qué se te antoja hoy entre clases?</string>
     <string name="dashboard_cart_label">Carrito</string>
     <string name="dashboard_search_hint">Buscar latte, sándwich...</string>
@@ -83,8 +83,13 @@
     <string name="error_lastname_required">Los apellidos son obligatorios</string>
     <string name="error_password_required">La contraseña es obligatoria</string>
     <string name="error_password_mismatch">Las contraseñas no coinciden</string>
+    <string name="error_email_duplicate">El correo ya se encuentra registrado</string>
+    <string name="error_user_not_found">No existe ningún usuario registrado con este correo</string>
+    <string name="error_invalid_password">La contraseña es incorrecta</string>
 
     <!-- Notificaciones / Mensajes -->
+    <string name="message_register_success">¡Cuenta creada exitosamente! Ahora puedes iniciar sesión</string>
+    <string name="message_login_success">¡Bienvenido de nuevo!</string>
     <string name="message_login_not_implemented">Inicio de sesión simulado: La autenticación con servidor no está implementada todavía.</string>
     <string name="message_register_not_implemented">Registro simulado: El almacenamiento de usuarios no está implementado todavía.</string>
     <string name="message_navigated_to_dashboard">Acceso temporal concedido al Dashboard.</string>

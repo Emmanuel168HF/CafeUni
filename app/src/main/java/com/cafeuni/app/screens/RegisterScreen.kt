@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,21 +45,25 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.cafeuni.app.R
 import com.cafeuni.app.components.CustomTextField
+import com.cafeuni.app.data.repository.UsuarioRepository
+import kotlinx.coroutines.launch
 
 /**
  * Pantalla 2: Registro (RegisterScreen) construida con Material Design 3 (M3).
  *
- * Características M3:
- * - `ElevatedCard` con contenedor de superficie M3 y bordes redondeados (`extraLarge`).
- * - `FilledTonalButton` para acciones secundarias M3.
- * - Formularios con tipografías y validaciones M3.
+ * Conectada directamente a la tabla `Usuario` de SQLite:
+ * - Registra nombre, apellidos, correo e inserción cifrada con PBKDF2 en `contrasena`.
+ * - Comprueba duplicados de correo en SQLite.
+ * - Al completar correctamente, regresa a la pantalla de Inicio de Sesión.
  */
 @Composable
 fun RegisterScreen(
+    usuarioRepository: UsuarioRepository,
     onNavigateToLogin: () -> Unit,
     onNavigateToDashboard: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     var name by remember { mutableStateOf("") }
     var lastname by remember { mutableStateOf("") }
@@ -126,11 +131,34 @@ fun RegisterScreen(
         }
 
         if (isValid) {
-            Toast.makeText(
-                context,
-                R.string.message_register_not_implemented,
-                Toast.LENGTH_LONG
-            ).show()
+            coroutineScope.launch {
+                val result = usuarioRepository.registrarUsuario(
+                    nombre = name,
+                    apellidos = lastname,
+                    correo = email,
+                    contrasena = password
+                )
+
+                if (result.isSuccess) {
+                    Toast.makeText(
+                        context,
+                        R.string.message_register_success,
+                        Toast.LENGTH_LONG
+                    ).show()
+                    onNavigateToLogin()
+                } else {
+                    val exception = result.exceptionOrNull()
+                    if (exception?.message == "EL_CORREO_YA_EXISTE") {
+                        emailErrorResId = R.string.error_email_duplicate
+                    } else {
+                        Toast.makeText(
+                            context,
+                            exception?.message ?: "Error al registrar usuario",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
         }
     }
 
