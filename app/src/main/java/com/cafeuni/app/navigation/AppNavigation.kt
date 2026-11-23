@@ -1,17 +1,13 @@
 package com.cafeuni.app.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.cafeuni.app.data.dao.PedidoDao
 import com.cafeuni.app.data.repository.UsuarioRepository
 import com.cafeuni.app.screens.DashboardScreen
 import com.cafeuni.app.screens.LoginScreen
@@ -35,25 +31,12 @@ object AppRoutes {
 fun AppNavigation(
     usuarioRepository: UsuarioRepository,
     sessionManager: SessionManager,
+    pedidoDao: PedidoDao,
     navController: NavHostController = rememberNavController()
 ) {
-    val isLoggedInState by sessionManager.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = null)
+    val isLoggedInState by sessionManager.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
 
-    val startRoute = when (isLoggedInState) {
-        true -> AppRoutes.DASHBOARD
-        false -> AppRoutes.LOGIN
-        null -> null
-    }
-
-    if (startRoute == null) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
-        return
-    }
+    val startRoute = if (isLoggedInState) AppRoutes.DASHBOARD else AppRoutes.LOGIN
 
     NavHost(
         navController = navController,
@@ -94,6 +77,8 @@ fun AppNavigation(
         composable(AppRoutes.DASHBOARD) {
             DashboardScreen(
                 sessionManager = sessionManager,
+                usuarioRepository = usuarioRepository,
+                pedidoDao = pedidoDao,
                 onLogout = {
                     // Cierra sesión y restablece la navegación a Inicio de Sesión limpiando la pila
                     navController.navigate(AppRoutes.LOGIN) {

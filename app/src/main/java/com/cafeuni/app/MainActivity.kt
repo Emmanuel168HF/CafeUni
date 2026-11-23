@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import com.cafeuni.app.data.dao.PedidoDao
 import com.cafeuni.app.data.database.DatabaseHelper
 import com.cafeuni.app.data.repository.UsuarioRepository
 import com.cafeuni.app.data.security.PasswordHasher
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var usuarioRepository: UsuarioRepository // NUEVO
     @Inject lateinit var sessionManager: SessionManager // NUEVO
+    @Inject lateinit var pedidoDao: PedidoDao // NUEVO
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +42,8 @@ class MainActivity : ComponentActivity() {
             CafeUniTheme {
                 AppNavigation(
                     usuarioRepository = usuarioRepository,
-                    sessionManager = sessionManager
+                    sessionManager = sessionManager,
+                    pedidoDao = pedidoDao
                 )
             }
         }
@@ -81,10 +84,14 @@ fun RegisterScreenPreview() {
 @Composable
 fun DashboardScreenPreview() {
     val context = LocalContext.current
+    val repository = UsuarioRepository(UsuarioDao(DatabaseHelper(context)), PasswordHasher())
     val session = SessionManager(context)
+    val dao = PedidoDao(DatabaseHelper(context))
     CafeUniTheme(darkTheme = false) {
         DashboardScreen(
             sessionManager = session,
+            usuarioRepository = repository,
+            pedidoDao = dao,
             onLogout = {}
         )
     }

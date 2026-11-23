@@ -42,7 +42,7 @@
     <string name="dashboard_user_greeting">¡Hola, %1$s!</string>
     <string name="dashboard_greeting_question">¿Qué se te antoja hoy entre clases?</string>
     <string name="dashboard_cart_label">Carrito</string>
-    <string name="dashboard_search_hint">Buscar latte, sándwich...</string>
+    <string name="dashboard_search_hint">Buscar latte, sándwich&#8230;</string>
 
     <string name="dashboard_chip_all">Todo</string>
     <string name="dashboard_chip_drinks">Bebidas</string>
@@ -74,6 +74,26 @@
     <string name="dashboard_nav_orders">Pedidos</string>
     <string name="dashboard_nav_profile">Perfil</string>
     <string name="dashboard_logout">Cerrar sesión</string>
+
+    <!-- Sección Pedidos (Pestaña Pedidos) -->
+    <string name="orders_title">Mis Pedidos</string>
+    <string name="orders_subtitle">Historial y seguimiento en tiempo real</string>
+    <string name="orders_placeholder">No tienes pedidos activos en este momento.</string>
+    <string name="orders_placeholder_sub">Los pedidos que realices en Café Uni aparecerán registrados aquí.</string>
+
+    <!-- Sección Perfil (Pestaña Perfil - Conectado a Base de Datos) -->
+    <string name="profile_title">Perfil de Usuario</string>
+    <string name="profile_subtitle">Información registrada en el sistema Café Uni</string>
+    <string name="profile_personal_info">Datos Personales</string>
+    <string name="profile_name_label">Nombre Completo</string>
+    <string name="profile_email_label">Correo Institucional</string>
+    <string name="profile_id_label">ID de Usuario</string>
+    <string name="profile_institution_label">Institución</string>
+    <string name="profile_institution_name">Universidad Tecnológica de Tula-Tepeji (UTTT)</string>
+    <string name="profile_settings_title">Ajustes y Configuración</string>
+    <string name="profile_option_notifications">Notificaciones de pedidos</string>
+    <string name="profile_option_security">Seguridad y Cifrado de Cuenta</string>
+    <string name="profile_option_about">Acerca de Café Uni v1.0</string>
 
     <!-- Validaciones -->
     <string name="error_email_required">El correo institucional es obligatorio</string>
