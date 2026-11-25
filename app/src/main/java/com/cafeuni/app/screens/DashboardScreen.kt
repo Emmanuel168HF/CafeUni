@@ -84,6 +84,7 @@ import coil.compose.AsyncImage
 import com.cafeuni.app.R
 import com.cafeuni.app.components.AboutDialog
 import com.cafeuni.app.components.CartDialog
+import com.cafeuni.app.components.ProductDetailQrDialog
 import com.cafeuni.app.components.QrScannerDialog
 import com.cafeuni.app.components.SecurityInfoDialog
 import com.cafeuni.app.components.TicketQrDialog
@@ -103,8 +104,8 @@ import kotlinx.coroutines.withContext
  * Pantalla 3: Dashboard Principal (DashboardScreen)
  *
  * Funcionalidades completadas:
- * 1. Pestaña Inicio con catálogo interactivo, filtro por categorías y buscador en tiempo real.
- * 2. Carrito de Compras funcional con diálogo interactivo, ajuste de cantidades e inserción real en SQLite.
+ * 1. Pestaña Inicio con catálogo interactivo, imágenes reales y reconocimiento directo de Códigos QR.
+ * 2. Carrito de Compras funcional con diálogo interactivo y generación de QR del ticket.
  * 3. Pestaña Pedidos conectada a SQLite mostrando el historial de pedidos y tickets con QR.
  * 4. Pestaña Perfil terminada: datos personales de SQLite, foto de perfil persistente, configuración de notificaciones, diálogo de seguridad y diálogo Acerca de.
  */
@@ -124,6 +125,7 @@ fun DashboardScreen(
 
     var currentUser by remember { mutableStateOf<Usuario?>(null) }
     var selectedTab by remember { mutableStateOf("inicio") }
+    var selectedCategory by remember { mutableStateOf("Todo") }
 
     // Estado del Carrito de compras
     val cartItems = remember { mutableStateListOf<CartItem>() }
@@ -133,10 +135,11 @@ fun DashboardScreen(
     var showQrScanner by remember { mutableStateOf(false) }
     var showSecurityDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var selectedProductForQr by remember { mutableStateOf<ProductoCatalog?>(null) }
     var notificationsEnabled by remember { mutableStateOf(true) }
 
     // Estado de Ticket activo generado
-    var activeTicketData by remember { mutableStateOf<Triple<String, String, String>?>(null) } // Triple(ProductoNombre, Precio, CodigoQR)
+    var activeTicketData by remember { mutableStateOf<Triple<String, String, String>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
     // Lista de pedidos reales consultados desde SQLite
@@ -196,6 +199,29 @@ fun DashboardScreen(
         }
     }
 
+    fun handleQrScanned(scannedCode: String) {
+        val trimmed = scannedCode.trim()
+
+        // Búsqueda inteligente del producto por código QR exacto, nombre o ID de producto
+        val matchedProduct = CatalogData.productos.find { prod ->
+            prod.codigoQr.equals(trimmed, ignoreCase = true) ||
+                    trimmed.contains(prod.codigoQr, ignoreCase = true) ||
+                    prod.nombre.equals(trimmed, ignoreCase = true) ||
+                    trimmed.contains(prod.nombre, ignoreCase = true) ||
+                    (trimmed.startsWith("PROD-CAFEEUNI-") && trimmed.contains("-${prod.id}-"))
+        }
+
+        if (matchedProduct != null) {
+            selectedCategory = "Todo"
+            searchQuery = matchedProduct.nombre
+            selectedProductForQr = matchedProduct
+            Toast.makeText(context, "¡Producto encontrado: ${matchedProduct.nombre}!", Toast.LENGTH_SHORT).show()
+        } else {
+            searchQuery = trimmed
+            Toast.makeText(context, "Código escaneado: $trimmed", Toast.LENGTH_LONG).show()
+        }
+    }
+
     // Diálogos Modales
     if (showCartDialog) {
         CartDialog(
@@ -223,10 +249,7 @@ fun DashboardScreen(
     if (showQrScanner) {
         QrScannerDialog(
             onDismiss = { showQrScanner = false },
-            onQrScanned = { scannedCode ->
-                searchQuery = scannedCode
-                Toast.makeText(context, "Menú escaneado: $scannedCode", Toast.LENGTH_LONG).show()
-            }
+            onQrScanned = { code -> handleQrScanned(code) }
         )
     }
 
@@ -236,6 +259,14 @@ fun DashboardScreen(
 
     if (showAboutDialog) {
         AboutDialog(onDismiss = { showAboutDialog = false })
+    }
+
+    if (selectedProductForQr != null) {
+        ProductDetailQrDialog(
+            producto = selectedProductForQr!!,
+            onAddToCart = { product -> handleAddToCart(product) },
+            onDismiss = { selectedProductForQr = null }
+        )
     }
 
     if (activeTicketData != null) {
@@ -353,10 +384,13 @@ fun DashboardScreen(
                 "inicio" -> DashboardInicioTabContent(
                     userName = userName,
                     searchQuery = searchQuery,
+                    selectedCategory = selectedCategory,
                     cartCount = cartItems.sumOf { it.cantidad },
+                    onCategoryChange = { selectedCategory = it },
                     onSearchQueryChange = { searchQuery = it },
                     onOpenScanner = { showQrScanner = true },
                     onOpenCart = { showCartDialog = true },
+                    onOpenProductQr = { product -> selectedProductForQr = product },
                     onAddToCart = { product -> handleAddToCart(product) }
                 )
                 "pedidos" -> DashboardPedidosTabContent(
@@ -384,30 +418,35 @@ fun DashboardScreen(
 }
 
 /**
- * Pestaña 1: Inicio (Con catálogo de productos, filtros y carrito)
+ * Pestaña 1: Inicio (Con catálogo de productos, reconocimiento inteligente de Códigos QR y filtros)
  */
 @Composable
 private fun DashboardInicioTabContent(
     userName: String,
     searchQuery: String,
+    selectedCategory: String,
     cartCount: Int,
+    onCategoryChange: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onOpenScanner: () -> Unit,
     onOpenCart: () -> Unit,
+    onOpenProductQr: (ProductoCatalog) -> Unit,
     onAddToCart: (ProductoCatalog) -> Unit
 ) {
-    var selectedCategory by remember { mutableStateOf("Todo") }
-
     val categories = listOf("Todo", "Bebidas", "Comida", "Postres")
     val displayName = if (userName.isNotEmpty()) userName else "Sofía"
 
-    // Filtro dinámico de productos por categoría y buscador
+    // Filtro dinámico inteligente que reconoce el nombre, la descripción y los códigos QR
     val productosFiltrados = remember(selectedCategory, searchQuery) {
         CatalogData.productos.filter { prod ->
             val matchesCategory = (selectedCategory == "Todo" || prod.categoria.equals(selectedCategory, ignoreCase = true))
-            val matchesSearch = searchQuery.isBlank() ||
-                    prod.nombre.contains(searchQuery, ignoreCase = true) ||
-                    prod.descripcion.contains(searchQuery, ignoreCase = true)
+            val queryLower = searchQuery.trim().lowercase()
+            val matchesSearch = queryLower.isBlank() ||
+                    prod.nombre.lowercase().contains(queryLower) ||
+                    prod.descripcion.lowercase().contains(queryLower) ||
+                    prod.codigoQr.lowercase().contains(queryLower) ||
+                    queryLower.contains(prod.codigoQr.lowercase()) ||
+                    queryLower.contains(prod.id.toString())
             matchesCategory && matchesSearch
         }
     }
@@ -501,7 +540,7 @@ private fun DashboardInicioTabContent(
         categories.forEach { category ->
             FilterChip(
                 selected = selectedCategory == category,
-                onClick = { selectedCategory = category },
+                onClick = { onCategoryChange(category) },
                 label = {
                     Text(
                         text = category,
@@ -604,6 +643,7 @@ private fun DashboardInicioTabContent(
                     val prod1 = par[0]
                     ProductCatalogCard(
                         producto = prod1,
+                        onProductClick = { onOpenProductQr(prod1) },
                         onAddToCart = { onAddToCart(prod1) },
                         modifier = Modifier.weight(1f)
                     )
@@ -611,6 +651,7 @@ private fun DashboardInicioTabContent(
                         val prod2 = par[1]
                         ProductCatalogCard(
                             producto = prod2,
+                            onProductClick = { onOpenProductQr(prod2) },
                             onAddToCart = { onAddToCart(prod2) },
                             modifier = Modifier.weight(1f)
                         )
@@ -661,45 +702,73 @@ private fun DashboardInicioTabContent(
 }
 
 /**
- * Tarjeta interactiva de producto del catálogo.
+ * Tarjeta interactiva de producto del catálogo con opción de tocar para ver el Código QR del producto.
  */
 @Composable
 private fun ProductCatalogCard(
     producto: ProductoCatalog,
+    onProductClick: () -> Unit,
     onAddToCart: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     OutlinedCard(
         shape = MaterialTheme.shapes.medium,
-        modifier = modifier
+        modifier = modifier.clickable { onProductClick() }
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(90.dp)
+                    .height(110.dp)
+                    .clip(MaterialTheme.shapes.small)
                     .background(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = MaterialTheme.shapes.small
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = producto.icon,
-                    contentDescription = producto.nombre,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(44.dp)
-                )
+                if (producto.imageUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = producto.imageUrl,
+                        contentDescription = producto.nombre,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = producto.icon,
+                        contentDescription = producto.nombre,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = producto.nombre,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = producto.nombre,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = onProductClick,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCode,
+                        contentDescription = "Ver Código QR del producto",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(2.dp))
 

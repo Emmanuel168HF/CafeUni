@@ -18,27 +18,24 @@ import com.cafeuni.app.screens.LoginScreen
 import com.cafeuni.app.screens.RegisterScreen
 import com.cafeuni.app.session.SessionManager
 import com.cafeuni.app.ui.theme.CafeUniTheme
-import dagger.hilt.android.AndroidEntryPoint // NUEVO
-import javax.inject.Inject // NUEVO
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Actividad Principal de Café Uni.
- *
- * Carga el tema existente (`CafeUniTheme`) y la navegación del prototipo (`AppNavigation`).
  */
-@AndroidEntryPoint // NUEVO
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var usuarioRepository: UsuarioRepository // NUEVO
-    @Inject lateinit var sessionManager: SessionManager // NUEVO
-    @Inject lateinit var pedidoDao: PedidoDao // NUEVO
+    @Inject lateinit var usuarioRepository: UsuarioRepository
+    @Inject lateinit var sessionManager: SessionManager
+    @Inject lateinit var pedidoDao: PedidoDao
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
-            // Aplicación del tema existente y sistema de navegación
             CafeUniTheme {
                 AppNavigation(
                     usuarioRepository = usuarioRepository,
@@ -74,8 +71,7 @@ fun RegisterScreenPreview() {
     CafeUniTheme(darkTheme = false) {
         RegisterScreen(
             usuarioRepository = repository,
-            onNavigateToLogin = {},
-            onNavigateToDashboard = {}
+            onNavigateToLogin = {}
         )
     }
 }

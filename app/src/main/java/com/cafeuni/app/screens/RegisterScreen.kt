@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,8 +58,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun RegisterScreen(
     usuarioRepository: UsuarioRepository,
-    onNavigateToLogin: () -> Unit,
-    onNavigateToDashboard: () -> Unit
+    onNavigateToLogin: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -348,22 +346,6 @@ fun RegisterScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Botón secundario M3 (FilledTonalButton) para ver el Dashboard directamente
-            FilledTonalButton(
-                onClick = onNavigateToDashboard,
-                shape = MaterialTheme.shapes.large,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.register_temporary_dashboard),
-                    style = MaterialTheme.typography.labelLarge
-                )
             }
         }
     }

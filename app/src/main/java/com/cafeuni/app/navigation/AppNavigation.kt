@@ -64,11 +64,6 @@ fun AppNavigation(
                 usuarioRepository = usuarioRepository,
                 onNavigateToLogin = {
                     navController.popBackStack()
-                },
-                onNavigateToDashboard = {
-                    navController.navigate(AppRoutes.DASHBOARD) {
-                        popUpTo(AppRoutes.LOGIN) { inclusive = true }
-                    }
                 }
             )
         }
