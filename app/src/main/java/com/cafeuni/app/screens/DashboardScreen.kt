@@ -4,9 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,7 +28,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
@@ -38,9 +35,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,12 +58,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,10 +82,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.cafeuni.app.R
+import com.cafeuni.app.components.AboutDialog
+import com.cafeuni.app.components.CartDialog
 import com.cafeuni.app.components.QrScannerDialog
+import com.cafeuni.app.components.SecurityInfoDialog
 import com.cafeuni.app.components.TicketQrDialog
 import com.cafeuni.app.data.dao.PedidoDao
+import com.cafeuni.app.data.dao.PedidoRegistroModel
 import com.cafeuni.app.data.repository.UsuarioRepository
+import com.cafeuni.app.models.CartItem
+import com.cafeuni.app.models.CatalogData
+import com.cafeuni.app.models.ProductoCatalog
 import com.cafeuni.app.models.Usuario
 import com.cafeuni.app.session.SessionManager
 import kotlinx.coroutines.Dispatchers
@@ -94,11 +102,11 @@ import kotlinx.coroutines.withContext
 /**
  * Pantalla 3: Dashboard Principal (DashboardScreen)
  *
- * Funcionalidades agregadas:
- * 1. Pestañas (`Inicio`, `Pedidos`, `Perfil`) totalmente funcionales.
- * 2. Foto de perfil interactiva en la pestaña Perfil (guardada en DataStore).
- * 3. Pedidos con generación e inserción de Ticket con Código QR real.
- * 4. Escáner de Códigos QR del menú físico con CameraX + ML Kit.
+ * Funcionalidades completadas:
+ * 1. Pestaña Inicio con catálogo interactivo, filtro por categorías y buscador en tiempo real.
+ * 2. Carrito de Compras funcional con diálogo interactivo, ajuste de cantidades e inserción real en SQLite.
+ * 3. Pestaña Pedidos conectada a SQLite mostrando el historial de pedidos y tickets con QR.
+ * 4. Pestaña Perfil terminada: datos personales de SQLite, foto de perfil persistente, configuración de notificaciones, diálogo de seguridad y diálogo Acerca de.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,19 +125,32 @@ fun DashboardScreen(
     var currentUser by remember { mutableStateOf<Usuario?>(null) }
     var selectedTab by remember { mutableStateOf("inicio") }
 
-    // Estados para diálogos interactivos
+    // Estado del Carrito de compras
+    val cartItems = remember { mutableStateListOf<CartItem>() }
+
+    // Estados de Diálogos
+    var showCartDialog by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
-    var activeTicketQr by remember { mutableStateOf<Pair<String, String>?>(null) } // Pair(Producto, Precio)
-    var generatedTicketQrCode by remember { mutableStateOf<String?>(null) }
+    var showSecurityDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var notificationsEnabled by remember { mutableStateOf(true) }
+
+    // Estado de Ticket activo generado
+    var activeTicketData by remember { mutableStateOf<Triple<String, String, String>?>(null) } // Triple(ProductoNombre, Precio, CodigoQR)
     var searchQuery by remember { mutableStateOf("") }
 
-    // Carga los datos del usuario de SQLite cuando se obtiene el userId de la sesión
-    LaunchedEffect(userId) {
+    // Lista de pedidos reales consultados desde SQLite
+    var historialPedidos by remember { mutableStateOf<List<PedidoRegistroModel>>(emptyList()) }
+
+    // Carga los datos del usuario e historial de pedidos desde SQLite
+    LaunchedEffect(userId, selectedTab) {
         userId?.let { id ->
             withContext(Dispatchers.IO) {
                 val user = usuarioRepository.obtenerUsuarioPorId(id)
+                val pedidos = pedidoDao.obtenerPedidosPorUsuario(id)
                 withContext(Dispatchers.Main) {
                     currentUser = user
+                    historialPedidos = pedidos
                 }
             }
         }
@@ -142,46 +163,87 @@ fun DashboardScreen(
         }
     }
 
-    fun handleOrderProduct(nombre: String, precio: String) {
+    fun handleAddToCart(product: ProductoCatalog) {
+        val existingIndex = cartItems.indexOfFirst { it.producto.id == product.id }
+        if (existingIndex >= 0) {
+            cartItems[existingIndex].cantidad += 1
+        } else {
+            cartItems.add(CartItem(producto = product, cantidad = 1))
+        }
+        Toast.makeText(context, "${product.nombre} agregado al carrito", Toast.LENGTH_SHORT).show()
+    }
+
+    fun handleConfirmOrderFromCart() {
+        if (cartItems.isEmpty()) return
+        val total = cartItems.sumOf { it.subtotal }
+        val totalFormatted = "$${"%.2f".format(total)}"
+        val resumen = cartItems.joinToString(", ") { "${it.cantidad}x ${it.producto.nombre}" }
+
         coroutineScope.launch(Dispatchers.IO) {
-            val priceVal = precio.replace("$", "").toDoubleOrNull() ?: 0.0
-            val ticketResult = pedidoDao.crearPedidoConTicket(
+            val ticketResult = pedidoDao.crearPedidoMultipleConTicket(
                 idUsuario = userId ?: 1L,
-                nombreProducto = nombre,
-                precio = priceVal
+                items = cartItems.toList(),
+                total = total
             )
+            val nuevosPedidos = pedidoDao.obtenerPedidosPorUsuario(userId ?: 1L)
+
             withContext(Dispatchers.Main) {
-                activeTicketQr = Pair(nombre, precio)
-                generatedTicketQrCode = ticketResult.codigoQr
+                cartItems.clear()
+                showCartDialog = false
+                historialPedidos = nuevosPedidos
+                activeTicketData = Triple(resumen, totalFormatted, ticketResult.codigoQr)
             }
         }
     }
 
-    // Diálogo Escáner QR de Menú Físico
+    // Diálogos Modales
+    if (showCartDialog) {
+        CartDialog(
+            cartItems = cartItems,
+            onIncrementQuantity = { item ->
+                val index = cartItems.indexOf(item)
+                if (index >= 0) cartItems[index] = item.copy(cantidad = item.cantidad + 1)
+            },
+            onDecrementQuantity = { item ->
+                val index = cartItems.indexOf(item)
+                if (index >= 0) {
+                    if (item.cantidad > 1) {
+                        cartItems[index] = item.copy(cantidad = item.cantidad - 1)
+                    } else {
+                        cartItems.removeAt(index)
+                    }
+                }
+            },
+            onRemoveItem = { item -> cartItems.remove(item) },
+            onConfirmOrder = { handleConfirmOrderFromCart() },
+            onDismiss = { showCartDialog = false }
+        )
+    }
+
     if (showQrScanner) {
         QrScannerDialog(
             onDismiss = { showQrScanner = false },
             onQrScanned = { scannedCode ->
                 searchQuery = scannedCode
-                Toast.makeText(
-                    context,
-                    "Menú escaneado: $scannedCode",
-                    Toast.LENGTH_LONG
-                ).show()
+                Toast.makeText(context, "Menú escaneado: $scannedCode", Toast.LENGTH_LONG).show()
             }
         )
     }
 
-    // Diálogo de Ticket con Código QR para el Pedido realizado
-    if (activeTicketQr != null && generatedTicketQrCode != null) {
+    if (showSecurityDialog) {
+        SecurityInfoDialog(onDismiss = { showSecurityDialog = false })
+    }
+
+    if (showAboutDialog) {
+        AboutDialog(onDismiss = { showAboutDialog = false })
+    }
+
+    if (activeTicketData != null) {
         TicketQrDialog(
-            productoNombre = activeTicketQr!!.first,
-            precio = activeTicketQr!!.second,
-            codigoQr = generatedTicketQrCode!!,
-            onDismiss = {
-                activeTicketQr = null
-                generatedTicketQrCode = null
-            }
+            productoNombre = activeTicketData!!.first,
+            precio = activeTicketData!!.second,
+            codigoQr = activeTicketData!!.third,
+            onDismiss = { activeTicketData = null }
         )
     }
 
@@ -291,15 +353,24 @@ fun DashboardScreen(
                 "inicio" -> DashboardInicioTabContent(
                     userName = userName,
                     searchQuery = searchQuery,
+                    cartCount = cartItems.sumOf { it.cantidad },
                     onSearchQueryChange = { searchQuery = it },
                     onOpenScanner = { showQrScanner = true },
-                    onOrderProduct = { nombre, precio -> handleOrderProduct(nombre, precio) }
+                    onOpenCart = { showCartDialog = true },
+                    onAddToCart = { product -> handleAddToCart(product) }
                 )
-                "pedidos" -> DashboardPedidosTabContent()
+                "pedidos" -> DashboardPedidosTabContent(
+                    pedidos = historialPedidos,
+                    onViewTicket = { nota, qr -> activeTicketData = Triple(nota, "", qr) }
+                )
                 "perfil" -> DashboardPerfilTabContent(
                     usuario = currentUser,
                     userNameFromSession = userName,
                     profileImageUri = profileImageUri,
+                    notificationsEnabled = notificationsEnabled,
+                    onToggleNotifications = { notificationsEnabled = it },
+                    onOpenSecurityInfo = { showSecurityDialog = true },
+                    onOpenAboutInfo = { showAboutDialog = true },
                     onUpdateProfileImage = { uriStr ->
                         coroutineScope.launch {
                             sessionManager.saveProfileImageUri(uriStr)
@@ -313,30 +384,37 @@ fun DashboardScreen(
 }
 
 /**
- * Pestaña 1: Inicio
+ * Pestaña 1: Inicio (Con catálogo de productos, filtros y carrito)
  */
 @Composable
 private fun DashboardInicioTabContent(
     userName: String,
     searchQuery: String,
+    cartCount: Int,
     onSearchQueryChange: (String) -> Unit,
     onOpenScanner: () -> Unit,
-    onOrderProduct: (String, String) -> Unit
+    onOpenCart: () -> Unit,
+    onAddToCart: (ProductoCatalog) -> Unit
 ) {
     var selectedCategory by remember { mutableStateOf("Todo") }
 
-    val categories = listOf(
-        stringResource(R.string.dashboard_chip_all),
-        stringResource(R.string.dashboard_chip_drinks),
-        stringResource(R.string.dashboard_chip_food),
-        stringResource(R.string.dashboard_chip_desserts)
-    )
-
+    val categories = listOf("Todo", "Bebidas", "Comida", "Postres")
     val displayName = if (userName.isNotEmpty()) userName else "Sofía"
+
+    // Filtro dinámico de productos por categoría y buscador
+    val productosFiltrados = remember(selectedCategory, searchQuery) {
+        CatalogData.productos.filter { prod ->
+            val matchesCategory = (selectedCategory == "Todo" || prod.categoria.equals(selectedCategory, ignoreCase = true))
+            val matchesSearch = searchQuery.isBlank() ||
+                    prod.nombre.contains(searchQuery, ignoreCase = true) ||
+                    prod.descripcion.contains(searchQuery, ignoreCase = true)
+            matchesCategory && matchesSearch
+        }
+    }
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    // 1. Saludo e indicador de Carrito
+    // 1. Saludo e indicador de Carrito con Contador
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -357,12 +435,20 @@ private fun DashboardInicioTabContent(
         }
         Spacer(modifier = Modifier.width(8.dp))
         AssistChip(
-            onClick = { },
+            onClick = onOpenCart,
             label = {
-                Text(
-                    text = stringResource(R.string.dashboard_cart_label),
-                    style = MaterialTheme.typography.labelLarge
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingCart,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (cartCount > 0) "Carrito ($cartCount)" else stringResource(R.string.dashboard_cart_label),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             },
             shape = CircleShape
         )
@@ -370,7 +456,7 @@ private fun DashboardInicioTabContent(
 
     Spacer(modifier = Modifier.height(16.dp))
 
-    // 2. Campo de Búsqueda con botón de Escáner QR de Menú Físico
+    // 2. Campo de Búsqueda con botón de Escáner QR
     OutlinedTextField(
         value = searchQuery,
         onValueChange = onSearchQueryChange,
@@ -407,7 +493,7 @@ private fun DashboardInicioTabContent(
 
     Spacer(modifier = Modifier.height(16.dp))
 
-    // 3. Fila de Filtros/Categorías (Todo, Bebidas, Comida, Postres)
+    // 3. Fila de Filtros/Categorías
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -473,20 +559,20 @@ private fun DashboardInicioTabContent(
 
     Spacer(modifier = Modifier.height(20.dp))
 
-    // 5. Encabezado de la sección "Populares del día"
+    // 5. Encabezado de Productos
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = stringResource(R.string.dashboard_popular_title),
+            text = "Catálogo de la Cafetería",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = stringResource(R.string.dashboard_popular_count),
+            text = "${productosFiltrados.size} opciones",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -494,58 +580,45 @@ private fun DashboardInicioTabContent(
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    val item1Name = stringResource(R.string.dashboard_item1_name)
-    val item1Price = stringResource(R.string.dashboard_item1_price)
-    val item2Name = stringResource(R.string.dashboard_item2_name)
-    val item2Price = stringResource(R.string.dashboard_item2_price)
-    val item3Name = stringResource(R.string.dashboard_item3_name)
-    val item3Price = stringResource(R.string.dashboard_item3_price)
-    val item4Name = stringResource(R.string.dashboard_item4_name)
-    val item4Price = stringResource(R.string.dashboard_item4_price)
-
-    // 6. Cuadrícula 2x2 de Productos Populares (con pedido interactivo y generación de QR)
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+    // 6. Lista/Cuadrícula de productos filtrados
+    if (productosFiltrados.isEmpty()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            WireframeProductCard(
-                nombre = item1Name,
-                estado = stringResource(R.string.dashboard_status_available),
-                precio = item1Price,
-                isAvailable = true,
-                onOrderClick = { onOrderProduct(item1Name, item1Price) },
-                modifier = Modifier.weight(1f)
-            )
-            WireframeProductCard(
-                nombre = item2Name,
-                estado = stringResource(R.string.dashboard_status_available),
-                precio = item2Price,
-                isAvailable = true,
-                onOrderClick = { onOrderProduct(item2Name, item2Price) },
-                modifier = Modifier.weight(1f)
+            Text(
+                text = "No se encontraron productos para \"$searchQuery\"",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            WireframeProductCard(
-                nombre = item3Name,
-                estado = stringResource(R.string.dashboard_status_available),
-                precio = item3Price,
-                isAvailable = true,
-                onOrderClick = { onOrderProduct(item3Name, item3Price) },
-                modifier = Modifier.weight(1f)
-            )
-            WireframeProductCard(
-                nombre = item4Name,
-                estado = stringResource(R.string.dashboard_status_out_of_stock),
-                precio = item4Price,
-                isAvailable = false,
-                onOrderClick = { },
-                modifier = Modifier.weight(1f)
-            )
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            productosFiltrados.chunked(2).forEach { par ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val prod1 = par[0]
+                    ProductCatalogCard(
+                        producto = prod1,
+                        onAddToCart = { onAddToCart(prod1) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (par.size > 1) {
+                        val prod2 = par[1]
+                        ProductCatalogCard(
+                            producto = prod2,
+                            onAddToCart = { onAddToCart(prod2) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 
@@ -588,10 +661,106 @@ private fun DashboardInicioTabContent(
 }
 
 /**
- * Pestaña 2: Pedidos
+ * Tarjeta interactiva de producto del catálogo.
  */
 @Composable
-private fun DashboardPedidosTabContent() {
+private fun ProductCatalogCard(
+    producto: ProductoCatalog,
+    onAddToCart: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = MaterialTheme.shapes.small
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = producto.icon,
+                    contentDescription = producto.nombre,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = producto.nombre,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = producto.descripcion,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Surface(
+                shape = CircleShape,
+                color = if (producto.disponible) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Text(
+                    text = if (producto.disponible) "Disponible" else "Agotado",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (producto.disponible) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = producto.precioFormateado,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                IconButton(
+                    onClick = onAddToCart,
+                    enabled = producto.disponible,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Agregar al carrito",
+                        tint = if (producto.disponible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Pestaña 2: Pedidos (Conectada a SQLite con historial real)
+ */
+@Composable
+private fun DashboardPedidosTabContent(
+    pedidos: List<PedidoRegistroModel>,
+    onViewTicket: (String, String) -> Unit
+) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -610,45 +779,113 @@ private fun DashboardPedidosTabContent() {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        ElevatedCard(
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+        if (pedidos.isEmpty()) {
+            ElevatedCard(
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
-                    contentDescription = null,
-                    modifier = Modifier.size(56.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+                        contentDescription = null,
+                        modifier = Modifier.size(56.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = stringResource(R.string.orders_placeholder),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    Text(
+                        text = stringResource(R.string.orders_placeholder),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                Text(
-                    text = stringResource(R.string.orders_placeholder_sub),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    Text(
+                        text = stringResource(R.string.orders_placeholder_sub),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                pedidos.forEach { item ->
+                    OutlinedCard(
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Pedido #${item.idPedido}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = item.estadoPedido,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = "Fecha: ${item.fechaPedido}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = item.notaPedido,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = { onViewTicket(item.notaPedido, item.codigoQr) },
+                                shape = CircleShape,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCode,
+                                    contentDescription = null
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Ver Código QR del Ticket")
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -657,13 +894,17 @@ private fun DashboardPedidosTabContent() {
 }
 
 /**
- * Pestaña 3: Perfil (COMPLETAMENTE TERMINADA Y CONECTADA CON FOTO DE PERFIL SELECCIONABLE)
+ * Pestaña 3: Perfil (Terminada con foto, datos SQLite y Configuración)
  */
 @Composable
 private fun DashboardPerfilTabContent(
     usuario: Usuario?,
     userNameFromSession: String,
     profileImageUri: String?,
+    notificationsEnabled: Boolean,
+    onToggleNotifications: (Boolean) -> Unit,
+    onOpenSecurityInfo: () -> Unit,
+    onOpenAboutInfo: () -> Unit,
     onUpdateProfileImage: (String) -> Unit,
     onLogout: () -> Unit
 ) {
@@ -699,7 +940,7 @@ private fun DashboardPerfilTabContent(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 1. Tarjeta principal del usuario con foto de perfil interactiva
+        // 1. Tarjeta principal del usuario con foto de perfil
         ElevatedCard(
             shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.elevatedCardColors(
@@ -715,7 +956,6 @@ private fun DashboardPerfilTabContent(
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Selector de foto de perfil
                 Box(
                     contentAlignment = Alignment.BottomEnd,
                     modifier = Modifier.clickable {
@@ -748,7 +988,6 @@ private fun DashboardPerfilTabContent(
                         }
                     }
 
-                    // Badge con ícono de cámara para indicar que se puede cambiar la foto
                     Surface(
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.primary,
@@ -829,7 +1068,7 @@ private fun DashboardPerfilTabContent(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 3. Sección de Ajustes y Configuración
+        // 3. Sección de Ajustes y Configuración Terminada
         Text(
             text = stringResource(R.string.profile_settings_title),
             style = MaterialTheme.typography.titleMedium,
@@ -844,20 +1083,90 @@ private fun DashboardPerfilTabContent(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                ProfileOptionRow(
-                    icon = Icons.Default.Notifications,
-                    text = stringResource(R.string.profile_option_notifications)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.profile_option_notifications),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = onToggleNotifications
+                    )
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                ProfileOptionRow(
-                    icon = Icons.Default.Lock,
-                    text = stringResource(R.string.profile_option_security)
-                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenSecurityInfo() },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.profile_option_security),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                ProfileOptionRow(
-                    icon = Icons.Default.Info,
-                    text = stringResource(R.string.profile_option_about)
-                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenAboutInfo() },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.profile_option_about),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -890,9 +1199,6 @@ private fun DashboardPerfilTabContent(
     }
 }
 
-/**
- * Fila de detalle personal del perfil
- */
 @Composable
 private fun ProfileDetailRow(
     icon: ImageVector,
@@ -922,136 +1228,6 @@ private fun ProfileDetailRow(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-        }
-    }
-}
-
-/**
- * Fila de opción de configuración en Perfil
- */
-@Composable
-private fun ProfileOptionRow(
-    icon: ImageVector,
-    text: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
- * Tarjeta de producto estilo Wireframe con botón interactivo "Pedir".
- */
-@Composable
-private fun WireframeProductCard(
-    nombre: String,
-    estado: String,
-    precio: String,
-    isAvailable: Boolean,
-    onOrderClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    OutlinedCard(
-        shape = MaterialTheme.shapes.medium,
-        modifier = modifier
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            // Cuadro de imagen estilo wireframe (con X cruzada)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(90.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = MaterialTheme.shapes.small
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = MaterialTheme.shapes.small
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = nombre,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Etiqueta de disponibilidad
-            Surface(
-                shape = CircleShape,
-                color = if (isAvailable) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                Text(
-                    text = estado,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Fila de precio y botón "+" para pedir
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = precio,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                IconButton(
-                    onClick = onOrderClick,
-                    enabled = isAvailable,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Pedir producto",
-                        tint = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                    )
-                }
-            }
         }
     }
 }
