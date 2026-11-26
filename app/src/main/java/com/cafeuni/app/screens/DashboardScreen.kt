@@ -4,6 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.School
@@ -76,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -84,6 +87,7 @@ import coil.compose.AsyncImage
 import com.cafeuni.app.R
 import com.cafeuni.app.components.AboutDialog
 import com.cafeuni.app.components.CartDialog
+import com.cafeuni.app.components.PrivacyPolicyDialog
 import com.cafeuni.app.components.ProductDetailQrDialog
 import com.cafeuni.app.components.QrScannerDialog
 import com.cafeuni.app.components.SecurityInfoDialog
@@ -103,11 +107,11 @@ import kotlinx.coroutines.withContext
 /**
  * Pantalla 3: Dashboard Principal (DashboardScreen)
  *
- * Funcionalidades completadas:
- * 1. Pestaña Inicio con catálogo interactivo, imágenes reales y reconocimiento directo de Códigos QR.
- * 2. Carrito de Compras funcional con diálogo interactivo y generación de QR del ticket.
- * 3. Pestaña Pedidos conectada a SQLite mostrando el historial de pedidos y tickets con QR.
- * 4. Pestaña Perfil terminada: datos personales de SQLite, foto de perfil persistente, configuración de notificaciones, diálogo de seguridad y diálogo Acerca de.
+ * Incluye:
+ * - Logo oficial de Café Uni en la barra superior y encabezado.
+ * - Política de Privacidad accesible en los ajustes de Perfil.
+ * - Reconocimiento de Códigos QR del menú físico.
+ * - Carrito e historial de pedidos en SQLite.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,6 +139,7 @@ fun DashboardScreen(
     var showQrScanner by remember { mutableStateOf(false) }
     var showSecurityDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
     var selectedProductForQr by remember { mutableStateOf<ProductoCatalog?>(null) }
     var notificationsEnabled by remember { mutableStateOf(true) }
 
@@ -202,7 +207,6 @@ fun DashboardScreen(
     fun handleQrScanned(scannedCode: String) {
         val trimmed = scannedCode.trim()
 
-        // Búsqueda inteligente del producto por código QR exacto, nombre o ID de producto
         val matchedProduct = CatalogData.productos.find { prod ->
             prod.codigoQr.equals(trimmed, ignoreCase = true) ||
                     trimmed.contains(prod.codigoQr, ignoreCase = true) ||
@@ -261,6 +265,17 @@ fun DashboardScreen(
         AboutDialog(onDismiss = { showAboutDialog = false })
     }
 
+    if (showPrivacyDialog) {
+        PrivacyPolicyDialog(
+            onAccept = {
+                coroutineScope.launch {
+                    sessionManager.setPrivacyPolicyAccepted(true)
+                }
+                showPrivacyDialog = false
+            }
+        )
+    }
+
     if (selectedProductForQr != null) {
         ProductDetailQrDialog(
             producto = selectedProductForQr!!,
@@ -287,7 +302,7 @@ fun DashboardScreen(
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(42.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 if (!profileImageUri.isNullOrEmpty()) {
@@ -300,23 +315,33 @@ fun DashboardScreen(
                                             .clip(CircleShape)
                                     )
                                 } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Coffee,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
+                                    // Logo oficial de Café Uni en el círculo de avatar
+                                    Image(
+                                        painter = painterResource(id = R.drawable.logo_cafe_uni),
+                                        contentDescription = stringResource(R.string.app_name),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
                                     )
                                 }
                             }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text(
-                                text = stringResource(R.string.dashboard_header_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.logo_cafe_uni),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(R.string.dashboard_header_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             Text(
                                 text = stringResource(R.string.dashboard_header_location),
                                 style = MaterialTheme.typography.bodySmall,
@@ -404,6 +429,7 @@ fun DashboardScreen(
                     notificationsEnabled = notificationsEnabled,
                     onToggleNotifications = { notificationsEnabled = it },
                     onOpenSecurityInfo = { showSecurityDialog = true },
+                    onOpenPrivacyPolicy = { showPrivacyDialog = true },
                     onOpenAboutInfo = { showAboutDialog = true },
                     onUpdateProfileImage = { uriStr ->
                         coroutineScope.launch {
@@ -418,7 +444,7 @@ fun DashboardScreen(
 }
 
 /**
- * Pestaña 1: Inicio (Con catálogo de productos, reconocimiento inteligente de Códigos QR y filtros)
+ * Pestaña 1: Inicio
  */
 @Composable
 private fun DashboardInicioTabContent(
@@ -436,7 +462,6 @@ private fun DashboardInicioTabContent(
     val categories = listOf("Todo", "Bebidas", "Comida", "Postres")
     val displayName = if (userName.isNotEmpty()) userName else "Sofía"
 
-    // Filtro dinámico inteligente que reconoce el nombre, la descripción y los códigos QR
     val productosFiltrados = remember(selectedCategory, searchQuery) {
         CatalogData.productos.filter { prod ->
             val matchesCategory = (selectedCategory == "Todo" || prod.categoria.equals(selectedCategory, ignoreCase = true))
@@ -453,19 +478,28 @@ private fun DashboardInicioTabContent(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    // 1. Saludo e indicador de Carrito con Contador
+    // 1. Saludo con Logo oficial e indicador de Carrito
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.dashboard_user_greeting, displayName),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo_cafe_uni),
+                    contentDescription = stringResource(R.string.app_name),
+                    modifier = Modifier.size(36.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.dashboard_user_greeting, displayName),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = stringResource(R.string.dashboard_greeting_question),
                 style = MaterialTheme.typography.bodyMedium,
@@ -702,7 +736,7 @@ private fun DashboardInicioTabContent(
 }
 
 /**
- * Tarjeta interactiva de producto del catálogo con opción de tocar para ver el Código QR del producto.
+ * Tarjeta interactiva de producto del catálogo.
  */
 @Composable
 private fun ProductCatalogCard(
@@ -963,7 +997,7 @@ private fun DashboardPedidosTabContent(
 }
 
 /**
- * Pestaña 3: Perfil (Terminada con foto, datos SQLite y Configuración)
+ * Pestaña 3: Perfil (Terminada con foto, datos SQLite y Configuración completa)
  */
 @Composable
 private fun DashboardPerfilTabContent(
@@ -973,6 +1007,7 @@ private fun DashboardPerfilTabContent(
     notificationsEnabled: Boolean,
     onToggleNotifications: (Boolean) -> Unit,
     onOpenSecurityInfo: () -> Unit,
+    onOpenPrivacyPolicy: () -> Unit,
     onOpenAboutInfo: () -> Unit,
     onUpdateProfileImage: (String) -> Unit,
     onLogout: () -> Unit
@@ -1196,6 +1231,36 @@ private fun DashboardPerfilTabContent(
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             text = stringResource(R.string.profile_option_security),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenPrivacyPolicy() },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.PrivacyTip,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Política de Privacidad",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )

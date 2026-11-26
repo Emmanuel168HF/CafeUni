@@ -2,17 +2,20 @@ package com.cafeuni.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.cafeuni.app.components.PrivacyPolicyDialog
 import com.cafeuni.app.data.dao.PedidoDao
 import com.cafeuni.app.data.repository.UsuarioRepository
 import com.cafeuni.app.screens.DashboardScreen
 import com.cafeuni.app.screens.LoginScreen
 import com.cafeuni.app.screens.RegisterScreen
 import com.cafeuni.app.session.SessionManager
+import kotlinx.coroutines.launch
 
 /**
  * Rutas de navegación de la aplicación Café Uni.
@@ -25,7 +28,7 @@ object AppRoutes {
 
 /**
  * Grafo de navegación entre las pantallas de la aplicación.
- * Evalúa la sesión activa mediante `SessionManager` para definir la pantalla inicial.
+ * Evalúa la sesión activa y la aceptación de la política de privacidad mediante `SessionManager`.
  */
 @Composable
 fun AppNavigation(
@@ -34,7 +37,20 @@ fun AppNavigation(
     pedidoDao: PedidoDao,
     navController: NavHostController = rememberNavController()
 ) {
+    val coroutineScope = rememberCoroutineScope()
     val isLoggedInState by sessionManager.isLoggedInFlow.collectAsStateWithLifecycle(initialValue = false)
+    val hasAcceptedPrivacyPolicy by sessionManager.hasAcceptedPrivacyPolicyFlow.collectAsStateWithLifecycle(initialValue = true)
+
+    // Si el usuario entra por primera vez y no ha aceptado la política de privacidad, se solicita su aceptación
+    if (!hasAcceptedPrivacyPolicy) {
+        PrivacyPolicyDialog(
+            onAccept = {
+                coroutineScope.launch {
+                    sessionManager.setPrivacyPolicyAccepted(true)
+                }
+            }
+        )
+    }
 
     val startRoute = if (isLoggedInState) AppRoutes.DASHBOARD else AppRoutes.LOGIN
 

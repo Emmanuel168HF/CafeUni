@@ -3,6 +3,7 @@ package com.cafeuni.app.session
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -16,7 +17,7 @@ import javax.inject.Singleton
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_session")
 
 /**
- * Gestor de sesiones de usuario utilizando DataStore Preferences.
+ * Gestor de sesiones de usuario y preferencias mediante DataStore Preferences.
  */
 @Singleton
 class SessionManager @Inject constructor(
@@ -28,6 +29,7 @@ class SessionManager @Inject constructor(
         private val KEY_USER_NAME = stringPreferencesKey("user_name")
         private val KEY_USER_EMAIL = stringPreferencesKey("user_email")
         private val KEY_PROFILE_IMAGE_URI = stringPreferencesKey("profile_image_uri")
+        private val KEY_PRIVACY_ACCEPTED = booleanPreferencesKey("privacy_accepted")
     }
 
     /**
@@ -52,10 +54,26 @@ class SessionManager @Inject constructor(
     }
 
     /**
+     * Flujo que indica si el usuario ya aceptó la política de privacidad.
+     */
+    val hasAcceptedPrivacyPolicyFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_PRIVACY_ACCEPTED] ?: false
+    }
+
+    /**
      * Flujo que emite true si el usuario ha iniciado sesión.
      */
     val isLoggedInFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KEY_USER_ID] != null
+    }
+
+    /**
+     * Guarda la aceptación de la política de privacidad en DataStore.
+     */
+    suspend fun setPrivacyPolicyAccepted(accepted: Boolean = true) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_PRIVACY_ACCEPTED] = accepted
+        }
     }
 
     /**
